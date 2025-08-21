@@ -61,8 +61,17 @@ pub enum Error {
     #[error("The package.json name is empty at {0:?}/package.json")]
     EmptyPackageName(PathBuf),
 
-    #[error("Package not found in graph, index at: {0:?}")]
-    PackageNotFound(NodeIndex),
+    #[error("Package {0} not found in workspace")]
+    PackageNotFound(String),
+
+    #[error("Task not found in workspace: {0}")]
+    TaskNotFound(String),
+
+    #[error("Dependency Task '{name}' not found in package located at {package_path}")]
+    TaskDependencyNotFound { name: String, package_path: String },
+
+    #[error("{task_request} should not contain multiple '#'")]
+    AmbiguousTaskRequest { task_request: String },
 
     #[error("Recursive run is not allowed when task name contains '#': {0}")]
     RecursiveRunWithScope(String),

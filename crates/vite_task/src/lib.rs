@@ -9,6 +9,9 @@ mod maybe_str;
 mod schedule;
 mod str;
 
+#[cfg(test)]
+mod test_utils;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -153,7 +156,7 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
         }
     };
 
-    let task_graph = workspace.resolve_tasks(tasks, task_args.clone(), recursive_run)?;
+    let task_graph = workspace.build_task_subgraph(tasks, task_args.clone(), recursive_run)?;
 
     let debug = resolve_bool_flag(args.debug, args.no_debug);
     if debug {
@@ -173,12 +176,11 @@ pub async fn main(cwd: PathBuf, args: Args) -> Result<(), Error> {
                 .await?;
         } else {
             for resolved_task in task_graph.node_weights() {
-                let cached_task =
-                    cache.get_cache(resolved_task.id.clone(), task_args.clone()).await?;
+                let cached_task = cache.get_cache(resolved_task).await?;
                 task_cache_map.push(CacheEntry {
                     cache_key: TaskCacheKey {
-                        task_id: resolved_task.id.clone(),
-                        args: task_args.clone(),
+                        command_fingerprint: resolved_task.resolved_command.fingerprint.clone(),
+                        args: resolved_task.args.clone(),
                     },
                     cached_task,
                 });
@@ -245,7 +247,7 @@ mod tests {
         let args =
             Args::try_parse_from(&["vite-plus", "test", "--", "--watch", "--verbose"]).unwrap();
         assert_eq!(args.task, Some("test".into()));
-        assert_eq!(args.task_args, vec!["--watch".into(), "--verbose".into()]);
+        assert_eq!(args.task_args, vec!["--watch", "--verbose"]);
         assert!(args.commands.is_none());
         assert!(!args.debug);
     }
@@ -365,7 +367,7 @@ mod tests {
             ..
         }) = args.commands
         {
-            assert_eq!(tasks, vec!["build".into(), "test".into()]);
+            assert_eq!(tasks, vec!["build", "test"]);
             assert!(task_args.is_empty());
             assert!(!recursive);
             assert!(!sequential);
@@ -383,7 +385,7 @@ mod tests {
                 .unwrap();
 
         if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into()]);
+            assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
             assert!(!parallel);
@@ -398,7 +400,7 @@ mod tests {
             Args::try_parse_from(&["vite-plus", "run", "--parallel", "build", "test"]).unwrap();
 
         if let Some(Commands::Run { tasks, parallel, sequential, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into(), "test".into()]);
+            assert_eq!(tasks, vec!["build", "test"]);
             assert!(parallel);
             assert!(!sequential);
         } else {
@@ -420,8 +422,8 @@ mod tests {
         .unwrap();
 
         if let Some(Commands::Run { tasks, task_args, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into(), "test".into()]);
-            assert_eq!(task_args, vec!["--watch".into(), "--verbose".into()]);
+            assert_eq!(tasks, vec!["build", "test"]);
+            assert_eq!(task_args, vec!["--watch", "--verbose"]);
         } else {
             panic!("Expected Run command");
         }
@@ -440,7 +442,7 @@ mod tests {
         .unwrap();
 
         if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into()]);
+            assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
             assert!(parallel);
@@ -455,7 +457,7 @@ mod tests {
 
         assert!(args.debug);
         if let Some(Commands::Run { tasks, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into()]);
+            assert_eq!(tasks, vec!["build"]);
         } else {
             panic!("Expected Run command");
         }
@@ -466,7 +468,7 @@ mod tests {
         let args = Args::try_parse_from(&["vite-plus", "run", "-r", "-s", "-p", "build"]).unwrap();
 
         if let Some(Commands::Run { tasks, recursive, sequential, parallel, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into()]);
+            assert_eq!(tasks, vec!["build"]);
             assert!(recursive);
             assert!(sequential);
             assert!(parallel);
@@ -512,10 +514,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(args.task, Some("test".into()));
-        assert_eq!(
-            args.task_args,
-            vec!["--config".into(), "jest.config.js".into(), "--coverage".into(), "--watch".into()]
-        );
+        assert_eq!(args.task_args, vec!["--config", "jest.config.js", "--coverage", "--watch"]);
     }
 
     #[test]
@@ -535,11 +534,8 @@ mod tests {
         .unwrap();
 
         if let Some(Commands::Run { tasks, task_args, recursive, .. }) = args.commands {
-            assert_eq!(tasks, vec!["build".into(), "test".into()]);
-            assert_eq!(
-                task_args,
-                vec!["--env".into(), "production".into(), "--output-dir".into(), "dist".into()]
-            );
+            assert_eq!(tasks, vec!["build", "test"]);
+            assert_eq!(task_args, vec!["--env", "production", "--output-dir", "dist"]);
             assert!(recursive);
         } else {
             panic!("Expected Run command");
@@ -568,15 +564,15 @@ mod tests {
         assert!(args1.task.is_none());
         assert!(args1.task_args.is_empty()); // Top-level task_args should be empty
         if let Some(Commands::Run { tasks, task_args, .. }) = &args1.commands {
-            assert_eq!(tasks, &vec!["build".into()]);
-            assert_eq!(task_args, &vec!["--watch".into(), "--mode=production".into()]);
+            assert_eq!(tasks, &vec!["build"]);
+            assert_eq!(task_args, &vec!["--watch", "--mode=production"]);
         } else {
             panic!("Expected Run command");
         }
 
         // Verify args2: implicit mode
         assert_eq!(args2.task, Some("build".into()));
-        assert_eq!(args2.task_args, vec!["--watch".into(), "--mode=development".into()]);
+        assert_eq!(args2.task_args, vec!["--watch", "--mode=development"]);
         assert!(args2.commands.is_none());
     }
 }

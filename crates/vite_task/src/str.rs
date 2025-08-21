@@ -113,15 +113,32 @@ impl<Context> Decode<Context> for Str {
 }
 impl_borrow_decode!(Str);
 
-impl<'a> From<&'a str> for Str {
-    fn from(value: &'a str) -> Self {
+impl From<&str> for Str {
+    fn from(value: &str) -> Self {
         Self(value.into())
     }
 }
 
-impl<'a> From<String> for Str {
+impl From<String> for Str {
     fn from(value: String) -> Self {
         Self(value.into())
+    }
+}
+
+impl From<CompactString> for Str {
+    fn from(value: CompactString) -> Self {
+        Self(value)
+    }
+}
+
+impl PartialEq<&str> for Str {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == other
+    }
+}
+impl PartialEq<str> for Str {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
     }
 }
 
