@@ -90,7 +90,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: run
 
-      - uses: oxc-project/setup-node@376ec3eb2d5cad9c200e276b7e760cad6b646d05 # main
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Build self
         run: cargo build --bin vt
@@ -128,7 +128,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test
 
-      - uses: oxc-project/setup-node@376ec3eb2d5cad9c200e276b7e760cad6b646d05 # main
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Build CLI
         run: pnpm run bootstrap-cli
@@ -158,7 +158,7 @@ jobs:
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
 
-      - uses: oxc-project/setup-node@376ec3eb2d5cad9c200e276b7e760cad6b646d05 # main
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Build vt
         run: cargo build --bin vt --release
