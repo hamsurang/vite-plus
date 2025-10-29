@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { parseArgs } from 'node:util';
 
-const filename = process.argv[2];
-const script = process.argv[3];
+const { positionals } = parseArgs({
+  allowPositionals: true,
+});
+
+const filename = positionals[0];
+const script = positionals[1];
 
 if (!filename || !script) {
   console.error('Usage: json-edit <filename> <script>');
