@@ -9,8 +9,8 @@
         "rolldown-vite#build-types",
         "@voidzero-dev/vite-plus-test#build",
         "@voidzero-dev/vite-plus-core#build",
-        "@voidzero-dev/vite-plus#build",
-        "@voidzero-dev/global#build"
+        "vite-plus#build",
+        "vite-plus-cli#build"
       ],
       "cache": false
     }
