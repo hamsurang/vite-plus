@@ -1,4 +1,4 @@
-# Vite+ CLI Installer for Windows
+﻿# Vite+ CLI Installer for Windows
 # https://viteplus.dev/install.ps1
 #
 # Usage:
@@ -131,7 +131,7 @@ function Download-AndExtract {
         & "$env:SystemRoot\System32\tar.exe" -xzf $tempFile -C $tempExtract
 
         # Copy the specified file/directory
-        $sourcePath = Join-Path $tempExtract "package" $Filter
+        $sourcePath = Join-Path (Join-Path $tempExtract "package") $Filter
         if (Test-Path $sourcePath) {
             Copy-Item -Path $sourcePath -Destination $DestDir -Recurse -Force
         }
@@ -293,7 +293,7 @@ function Main {
             & "$env:SystemRoot\System32\tar.exe" -xzf $platformTempFile -C $platformTempExtract
 
             # Copy binary to BinDir
-            $binarySource = Join-Path $platformTempExtract "package" $binaryName
+            $binarySource = Join-Path (Join-Path $platformTempExtract "package") $binaryName
             if (Test-Path $binarySource) {
                 Copy-Item -Path $binarySource -Destination $BinDir -Force
             }
