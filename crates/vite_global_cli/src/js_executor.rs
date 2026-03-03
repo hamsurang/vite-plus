@@ -6,11 +6,14 @@
 use std::process::ExitStatus;
 
 use tokio::process::Command;
-use vite_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
+use vite_js_runtime::{
+    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
+    read_package_json, resolve_node_version,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
-use crate::error::Error;
+use crate::{commands::env::config, error::Error};
 
 /// JavaScript executor using managed Node.js runtime.
 ///
@@ -134,15 +137,52 @@ impl JsExecutor {
 
     /// Ensure the project runtime is downloaded and cached.
     ///
-    /// Uses the project's package.json `devEngines.runtime` configuration
-    /// to determine which Node.js version to use.
+    /// Resolution order:
+    /// 1. Session override (env var from `vp env use`)
+    /// 2. Session override (file from `vp env use`)
+    /// 3. Project sources (.node-version, engines.node, devEngines.runtime) —
+    ///    delegates to `download_runtime_for_project()` for cache-aware resolution
+    /// 4. User default from config.json
+    /// 5. Latest LTS
     pub async fn ensure_project_runtime(
         &mut self,
         project_path: &AbsolutePath,
     ) -> Result<&JsRuntime, Error> {
         if self.project_runtime.is_none() {
             tracing::debug!("Resolving project runtime from {:?}", project_path);
-            let runtime = download_runtime_for_project(project_path).await?;
+
+            // 1–2. Session overrides: env var (from `vp env use`), then file
+            let session_version = vite_shared::EnvConfig::get()
+                .node_version
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty());
+            let session_version = if session_version.is_some() {
+                session_version
+            } else {
+                config::read_session_version().await
+            };
+            if let Some(version) = session_version {
+                let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
+                return Ok(self.project_runtime.insert(runtime));
+            }
+
+            // 3. Check if project has any *valid* version source.
+            //    resolve_node_version returns Some for any non-empty value,
+            //    even invalid ones. We must validate before routing to
+            //    download_runtime_for_project, which falls to LTS on all-invalid
+            //    and would skip the user's configured default.
+            let has_valid_project_source = has_valid_version_source(project_path).await?;
+
+            let runtime = if has_valid_project_source {
+                // At least one valid project source exists — delegate to
+                // download_runtime_for_project for cache-aware range resolution
+                // and intra-project fallback chain
+                download_runtime_for_project(project_path).await?
+            } else {
+                // No valid project source — check user default from config, then LTS
+                let resolution = config::resolve_version(project_path).await?;
+                download_runtime(JsRuntimeType::Node, &resolution.version).await?
+            };
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
@@ -163,8 +203,7 @@ impl JsExecutor {
     /// If found, runs the local `dist/bin.js` directly. Otherwise, falls back
     /// to the global installation's `dist/bin.js`.
     ///
-    /// Uses the project's runtime (from its `devEngines.runtime` configuration).
-    /// This may write a `.node-version` file if the project has no version source.
+    /// Uses the project's runtime resolved via `config::resolve_version()`.
     /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
     ///
     /// # Arguments
@@ -250,6 +289,48 @@ impl JsExecutor {
             None
         }
     }
+}
+
+/// Check whether a project directory has at least one valid version source.
+///
+/// Uses `is_valid_version` (no warning side effects) to avoid duplicate
+/// warnings when `download_runtime_for_project` or `config::resolve_version`
+/// later call `normalize_version` on the same values.
+///
+/// Returns `false` when all sources are missing or invalid, so the caller
+/// can fall through to the user's configured default instead of LTS.
+async fn has_valid_version_source(
+    project_path: &AbsolutePath,
+) -> Result<bool, vite_js_runtime::Error> {
+    let resolution = resolve_node_version(project_path, true).await?;
+    let Some(ref r) = resolution else {
+        return Ok(false);
+    };
+
+    // Primary source is a valid version?
+    if is_valid_version(&r.version) {
+        return Ok(true);
+    }
+
+    // Primary source invalid — check package.json for valid fallbacks
+    let pkg_path = project_path.join("package.json");
+    let Ok(Some(pkg)) = read_package_json(&pkg_path).await else {
+        return Ok(false);
+    };
+
+    let engines_valid =
+        pkg.engines.as_ref().and_then(|e| e.node.as_ref()).is_some_and(|v| is_valid_version(v));
+
+    let dev_engines_valid = !engines_valid
+        && pkg
+            .dev_engines
+            .as_ref()
+            .and_then(|de| de.runtime.as_ref())
+            .and_then(|rt| rt.find_by_name("node"))
+            .filter(|r| !r.version.is_empty())
+            .is_some_and(|r| is_valid_version(&r.version));
+
+    Ok(engines_valid || dev_engines_valid)
 }
 
 #[cfg(test)]
