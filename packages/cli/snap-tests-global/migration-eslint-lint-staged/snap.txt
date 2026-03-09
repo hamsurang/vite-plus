@@ -64,12 +64,15 @@ export default defineConfig({
     "categories": {
       "correctness": "warn"
     },
-    "$schema": "./node_modules/oxlint/configuration_schema.json",
     "env": {
       "builtin": true
     },
     "rules": {
       "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
     }
   },
   staged: {

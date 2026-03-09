@@ -17,6 +17,7 @@ import {
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
 import { runCommandSilently } from '../utils/command.js';
 import {
+  BASEURL_TSCONFIG_WARNING,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
@@ -26,6 +27,7 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
+import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import { detectConfigs, type ConfigFiles } from './detector.js';
 
@@ -928,6 +930,24 @@ export function mergeViteConfigFiles(projectPath: string, silent = false): void 
   }
   const viteConfig = ensureViteConfig(projectPath, configs, silent);
   if (configs.oxlintConfig) {
+    // Inject options.typeAware and options.typeCheck defaults before merging
+    const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
+    const oxlintJson = JSON.parse(fs.readFileSync(fullOxlintPath, 'utf8'));
+    if (!oxlintJson.options) {
+      oxlintJson.options = {};
+    }
+    // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+    if (!hasBaseUrlInTsconfig(projectPath)) {
+      if (oxlintJson.options.typeAware === undefined) {
+        oxlintJson.options.typeAware = true;
+      }
+      if (oxlintJson.options.typeCheck === undefined) {
+        oxlintJson.options.typeCheck = true;
+      }
+    } else if (!silent) {
+      prompts.log.warn(BASEURL_TSCONFIG_WARNING);
+    }
+    fs.writeFileSync(fullOxlintPath, JSON.stringify(oxlintJson, null, 2));
     // merge oxlint config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent);
   }

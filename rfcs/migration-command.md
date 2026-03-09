@@ -243,6 +243,10 @@ export default defineConfig({
 
   // Oxlint configuration
   lint: {
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
     rules: {
       'no-unused-vars': 'error',
       'no-console': 'warn',
@@ -251,6 +255,8 @@ export default defineConfig({
   },
 });
 ```
+
+> **Note**: If `tsconfig.json` contains `compilerOptions.baseUrl`, `typeAware` and `typeCheck` are not injected because oxlint's TypeScript checker does not yet support `baseUrl`. Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to migrate away from `baseUrl`.
 
 ### Oxfmt Configuration
 

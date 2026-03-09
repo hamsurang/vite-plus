@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
+> vp migrate --no-interactive # migration should skip typeAware/typeCheck when tsconfig has baseUrl
 VITE+ - The Unified Toolchain for the Web
 
 
@@ -10,9 +10,10 @@ pnpm@<semver> installed
 
 ✔ Created vite.config.ts in vite.config.ts
 
-✔ Merged .oxlintrc.json into vite.config.ts
+Skipped typeAware/typeCheck: tsconfig.json contains baseUrl which is not yet supported by the oxlint type checker.
+  Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to remove baseUrl from your tsconfig.
 
-✔ Merged .oxfmtrc.json into vite.config.ts
+✔ Merged .oxlintrc.json into vite.config.ts
 
 ✔ Merged staged config into vite.config.ts
 
@@ -20,36 +21,23 @@ Wrote agent instructions to AGENTS.md
 ✔ Migration completed!
 
 
-> cat vite.config.ts # check vite.config.ts
+> cat vite.config.ts # check vite.config.ts — should NOT have typeAware or typeCheck
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   staged: {
     "*": "vp check --fix"
   },
-  fmt: {
-    "printWidth": 100,
-    "tabWidth": 2,
-    "semi": true,
-    "singleQuote": true,
-    "trailingComma": "es5"
-  },
   lint: {
     "rules": {
       "no-unused-vars": "error"
     },
-    "options": {
-      "typeAware": true,
-      "typeCheck": true
-    }
+    "options": {}
   },
 });
 
 > cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
 cat: .oxlintrc.json: No such file or directory
-
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
 
 > cat package.json # check package.json
 {
