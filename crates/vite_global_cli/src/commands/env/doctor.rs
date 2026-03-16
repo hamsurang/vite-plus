@@ -578,61 +578,53 @@ fn check_profile_files(
 }
 
 /// Print IDE setup guidance for GUI applications.
+#[cfg(not(windows))]
 fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
-    // On Windows, IDE PATH is handled by System Environment Variables (covered by check_path)
-    #[cfg(windows)]
-    {
-        let _ = bin_dir;
-    }
-
-    #[cfg(not(windows))]
-    {
-        // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
-        let home_path = bin_dir
-            .parent()
-            .map(|p| p.as_path().display().to_string())
-            .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-        let home_path = if let Ok(home_dir) = std::env::var("HOME") {
-            if let Some(suffix) = home_path.strip_prefix(&home_dir) {
-                format!("$HOME{suffix}")
-            } else {
-                home_path
-            }
+    // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
+    let home_path = bin_dir
+        .parent()
+        .map(|p| p.as_path().display().to_string())
+        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
+    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+        if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+            format!("$HOME{suffix}")
         } else {
             home_path
-        };
-
-        print_section("IDE Setup");
-        print_check(
-            &output::WARN_SIGN.yellow().to_string(),
-            "",
-            &"GUI applications may not see shell PATH changes.".yellow().to_string(),
-        );
-        println!();
-
-        #[cfg(target_os = "macos")]
-        {
-            println!("  {}", "macOS:".dimmed());
-            println!("  {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
-            println!("  . \"{home_path}/env\"");
-            println!("  {}", "Then restart your IDE to apply changes.".dimmed());
         }
+    } else {
+        home_path
+    };
 
-        #[cfg(target_os = "linux")]
-        {
-            println!("  {}", "Linux:".dimmed());
-            println!("  {}", "Add to ~/.profile:".dimmed());
-            println!("  . \"{home_path}/env\"");
-            println!("  {}", "Then log out and log back in for changes to take effect.".dimmed());
-        }
+    print_section("IDE Setup");
+    print_check(
+        &output::WARN_SIGN.yellow().to_string(),
+        "",
+        &"GUI applications may not see shell PATH changes.".yellow().to_string(),
+    );
+    println!();
 
-        // Fallback for other Unix platforms
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-        {
-            println!("  {}", "Add to your shell profile:".dimmed());
-            println!("  . \"{home_path}/env\"");
-            println!("  {}", "Then restart your IDE to apply changes.".dimmed());
-        }
+    #[cfg(target_os = "macos")]
+    {
+        println!("  {}", "macOS:".dimmed());
+        println!("  {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
+        println!("  . \"{home_path}/env\"");
+        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("  {}", "Linux:".dimmed());
+        println!("  {}", "Add to ~/.profile:".dimmed());
+        println!("  . \"{home_path}/env\"");
+        println!("  {}", "Then log out and log back in for changes to take effect.".dimmed());
+    }
+
+    // Fallback for other Unix platforms
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        println!("  {}", "Add to your shell profile:".dimmed());
+        println!("  . \"{home_path}/env\"");
+        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
     }
 }
 
