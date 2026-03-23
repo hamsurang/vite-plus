@@ -35,3 +35,9 @@ Cannot scaffold into the monorepo root directory. Use --directory to specify a t
 Using package name: src
 Cannot scaffold inside existing package "website" (apps/website). Use --directory to specify a different location
 
+
+> cd apps/website && vp create --no-interactive vite:application --directory . 2>&1 || true # --directory . at existing package root should fail
+
+Using package name: website
+Cannot scaffold inside existing package "website" (apps/website). Use --directory to specify a different location
+
