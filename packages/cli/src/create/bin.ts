@@ -583,9 +583,26 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         fallbackName,
       );
       prompts.log.info(`Using package name: ${accent(packageName)}`);
-      // In a monorepo subdirectory, resolve '.' to the path relative to rootDir
-      // so that scaffolding happens in cwd, not at the workspace root
-      if (isMonorepo && cwdRelativeToRoot) {
+      if (isMonorepo) {
+        if (!cwdRelativeToRoot) {
+          // At monorepo root: scaffolding here would overwrite the entire workspace
+          cancelAndExit(
+            'Cannot scaffold into the monorepo root directory. Use --directory to specify a target directory',
+            1,
+          );
+        }
+        // Check if cwd is inside an existing workspace package
+        const enclosingPackage = workspaceInfoOptional.packages.find((pkg) =>
+          cwdRelativeToRoot.startsWith(`${pkg.path}/`),
+        );
+        if (enclosingPackage) {
+          cancelAndExit(
+            `Cannot scaffold inside existing package "${enclosingPackage.name}" (${enclosingPackage.path}). Use --directory to specify a different location`,
+            1,
+          );
+        }
+        // Resolve '.' to the path relative to rootDir
+        // so that scaffolding happens in cwd, not at the workspace root
         targetDir = cwdRelativeToRoot;
       }
     } else if (selectedTemplateName === BuiltinTemplate.monorepo) {
