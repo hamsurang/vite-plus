@@ -1510,10 +1510,13 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
 /**
  * Check if the project has an unsupported husky version (<9.0.0).
  * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
+ * When the specifier is not coercible (e.g. `"latest"`), falls back to
+ * the installed version in node_modules via `detectPackageMetadata`.
  * Returns a reason string if hooks migration should be skipped, or null
  * if husky is absent or compatible.
  */
 function checkUnsupportedHuskyVersion(
+  projectPath: string,
   deps: Record<string, string> | undefined,
   prodDeps: Record<string, string> | undefined,
 ): string | null {
@@ -1521,9 +1524,15 @@ function checkUnsupportedHuskyVersion(
   if (!huskyVersion) {
     return null;
   }
-  const coerced = semver.coerce(huskyVersion);
+  let coerced = semver.coerce(huskyVersion);
   if (coerced == null) {
-    return `Could not determine husky version from "${huskyVersion}" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.`;
+    const installed = detectPackageMetadata(projectPath, 'husky');
+    if (installed) {
+      coerced = semver.coerce(installed.version);
+    }
+    if (coerced == null) {
+      return `Could not determine husky version from "${huskyVersion}" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.`;
+    }
   }
   if (semver.satisfies(coerced, '<9.0.0')) {
     return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
@@ -1642,7 +1651,7 @@ export function preflightGitHooksSetup(projectPath: string): string | null {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
     }
   }
-  const huskyReason = checkUnsupportedHuskyVersion(deps, prodDeps);
+  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps);
   if (huskyReason) {
     return huskyReason;
   }
