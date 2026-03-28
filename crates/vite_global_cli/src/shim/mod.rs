@@ -101,22 +101,30 @@ fn is_potential_package_binary(tool: &str) -> bool {
 /// Environment variable used for shim tool detection via shell wrapper scripts.
 const SHIM_TOOL_ENV_VAR: &str = env_vars::VP_SHIM_TOOL;
 
+/// Legacy environment variable name, kept for backward compatibility with
+/// older trampoline binaries that still set `VITE_PLUS_SHIM_TOOL`.
+const LEGACY_SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
+
 /// Detect the shim tool from environment and argv.
 ///
 /// Detection priority:
 /// 1. Check `VP_SHIM_TOOL` env var (set by trampoline exe on Windows)
-/// 2. If argv[0] is "vp" or "vp.exe", this is a direct CLI invocation - NOT shim mode
-/// 3. Fall back to argv[0] detection (primary method on Unix with symlinks)
+/// 2. Fall back to `VITE_PLUS_SHIM_TOOL` for older trampoline compatibility
+/// 3. If argv[0] is "vp" or "vp.exe", this is a direct CLI invocation - NOT shim mode
+/// 4. Fall back to argv[0] detection (primary method on Unix with symlinks)
 ///
-/// IMPORTANT: This function clears `VP_SHIM_TOOL` after reading it to
-/// prevent the env var from leaking to child processes.
+/// IMPORTANT: This function clears both env vars after reading to
+/// prevent them from leaking to child processes.
 pub fn detect_shim_tool(argv0: &str) -> Option<String> {
-    // Always clear the env var to prevent it from leaking to child processes.
-    // We read it first, then clear it immediately.
+    // Always clear both env vars to prevent them from leaking to child processes.
+    // We read them first, then clear immediately.
     // SAFETY: We're at program startup before any threads are spawned.
-    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR).ok();
+    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR)
+        .ok()
+        .or_else(|| std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).ok());
     unsafe {
         std::env::remove_var(SHIM_TOOL_ENV_VAR);
+        std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
     }
 
     // Check VP_SHIM_TOOL env var first (set by trampoline exe on Windows).
@@ -147,6 +155,8 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
@@ -205,6 +215,37 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn test_detect_shim_tool_from_env_var() {
+        // SAFETY: We're in a test at startup, no other threads
+        unsafe {
+            std::env::set_var(SHIM_TOOL_ENV_VAR, "node");
+            std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
+        }
+        let result = detect_shim_tool("vp");
+        assert_eq!(result, Some("node".to_string()));
+        // Env var should be cleared after detection
+        assert!(std::env::var(SHIM_TOOL_ENV_VAR).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shim_tool_from_legacy_env_var() {
+        // When only VITE_PLUS_SHIM_TOOL is set (older trampoline), it should
+        // fall back to reading the legacy env var.
+        // SAFETY: We're in a test at startup, no other threads
+        unsafe {
+            std::env::remove_var(SHIM_TOOL_ENV_VAR);
+            std::env::set_var(LEGACY_SHIM_TOOL_ENV_VAR, "npm");
+        }
+        let result = detect_shim_tool("vp");
+        assert_eq!(result, Some("npm".to_string()));
+        // Both env vars should be cleared after detection
+        assert!(std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).is_err());
+    }
+
+    #[test]
+    #[serial]
     fn test_detect_shim_tool_vpx() {
         // vpx should be detected via the argv0 check, before the env var check
         // and before is_shim_tool (which would incorrectly match it as a package binary)
